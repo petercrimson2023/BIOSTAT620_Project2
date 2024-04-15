@@ -1,0 +1,377 @@
+---
+title: "plots"
+author: "Bulun Te"
+date: "2024-04-14"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## reading R data  complete_data.RData
+```{r}
+setwd(here::here())
+load("complete_data3.RData")
+
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+#library(caret)
+#library(np)
+```
+
+
+
+## Output basic summary
+
+```{r}
+names(complete_data)
+```
+
+```{r}
+
+complete_data$Total.ST.min.smoothed <- rep(0, nrow(complete_data))
+# complete_data$Total.ST.min.smoothed <- rep(0, nrow(complete_data))
+
+# Loop over each unique pseudo_ID
+for (i in unique(complete_data$pseudo_ID)) {
+  # Filter data for the current pseudo_ID
+  temp <- complete_data %>% filter(pseudo_ID == i)
+  
+  # Check if the filtered data frame is empty
+  if (nrow(temp) > 0) {
+    # Use smooth() function from stats package, with kind = "3RS3R" for triple smoothing
+    smoothed_values <- smooth(temp$Total.ST.min, kind = "3RS3R")
+    
+    # Update the main data frame
+    complete_data$Total.ST.min.smoothed[complete_data$pseudo_ID == i] <- smoothed_values
+  } else {
+    message("No data for pseudo_ID ", i)
+  }
+}
+
+
+
+```
+
+
+```{r}
+
+# 创建一个shiny app，查看上面的平滑效果，要求根据pseudo_ID来选择不同的人，选择对应的人时将
+# Total.ST.min和光滑后的数据画在一张图上，使用ggplot2，time变量根据每个人的样本量，建立从1：样本量的序列
+
+library(shiny)
+
+ui <- fluidPage(
+  titlePanel("Total.ST.min smoothing"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("ID", "Choose a person:", choices = unique(complete_data$pseudo_ID))
+    ),
+    mainPanel(
+      plotOutput("plot")
+    )
+  )
+)
+
+server <- function(input, output) {
+  output$plot <- renderPlot({
+    temp <- complete_data %>% filter(pseudo_ID == input$ID)
+    temp$time <- temp$Date
+    ggplot(temp, aes(x = time)) +
+      geom_line(aes(y = Total.ST.min, color = "raw")) +
+      geom_line(aes(y = Total.ST.min.smoothed, color = "smoothed")) +
+      labs(title = paste("Person", input$ID))
+  })
+}
+
+shinyApp(ui = ui, server = server)
+
+```
+
+
+```{r}
+
+
+# 下一步检查Total.ST.min, Total.St.min.smoothed, Pickups, Proportion.ST, procrastination_score 在 sex,Phase, Xt, Semester 这些变量分组下的均值，中位数，Q1,Q3,variance：
+
+# 创建shinyapp，可以选择一个变量，然后选择一个分组变量，比如sex，然后显示这个变量在不同分组下的均值，中位数，Q1,Q3,variance
+
+ui <- fluidPage(
+  titlePanel("Summary Statistics"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choose a variable:", 
+                  choices = c("Total.ST.min", "Total.ST.min.smoothed", "Pickups", "Proportion.ST", "procrastination_score")),
+      selectInput("group", "Choose grouping variables:", 
+                  choices = c("sex", "Phase", "Xt", "Semester"),
+                  multiple = TRUE)
+    ),
+    mainPanel(
+      tableOutput("summary")
+    )
+  )
+)
+
+server <- function(input, output) {
+  
+  output$summary <- renderTable({
+    variable <- input$variable
+    group <- input$group
+    
+    if (length(group) == 0) {
+      complete_data %>%
+        summarise(
+          Mean = mean(!!sym(variable), na.rm = TRUE),
+          Median = median(!!sym(variable), na.rm = TRUE),
+          Q1 = quantile(!!sym(variable), 0.25, na.rm = TRUE),
+          Q3 = quantile(!!sym(variable), 0.75, na.rm = TRUE),
+          Variance = var(!!sym(variable), na.rm = TRUE)
+        )
+    } else {
+      complete_data %>%
+        group_by(across(all_of(group))) %>%
+        summarise(
+          Mean = mean(!!sym(variable), na.rm = TRUE),
+          Median = median(!!sym(variable), na.rm = TRUE),
+          Q1 = quantile(!!sym(variable), 0.25, na.rm = TRUE),
+          Q3 = quantile(!!sym(variable), 0.75, na.rm = TRUE),
+          Variance = var(!!sym(variable), na.rm = TRUE)
+        )
+    }
+  })
+  
+}
+
+shinyApp(ui, server)
+
+
+```
+
+
+```{r}
+
+# 创建一个数据集，包含每个pseudo_ID的Total.ST.min, Social.ST.min, Pickups, Porportion.ST的众数和sex
+# 创建一个 shiny app 绘制 Total.ST.min, Social.ST.min, Pickups, Porportion.ST的众数和根据不同的sex分类时的柱形图，使用ggplot2
+
+# 创建一个数据集，包含每个pseudo_ID的Total.ST.min, Social.ST.min, Pickups, Porportion.ST的众数和sex
+
+
+    
+
+
+
+```
+
+
+
+## plotting the lines
+
+
+```{r}
+
+#创建型的一个数据集
+#从complete_data_with_date中选取最早的日期和最晚的日期
+
+min_date <- min(complete_data$Date)
+max_date <- max(complete_data$Date)
+
+# 创建形如 “2024-02-05" 的日趋序列，
+
+date_seq <- seq.Date(from = min_date, to = max_date, by = "day")
+
+# 创建一个新的数据集 Total_ST_min，使用data_seq作为时间轴，选取compelte_data_with_date中每个pseudo_id的Total.St.min,
+# 如果该日期下Total.ST.min为空，则用NA填充
+
+Total_ST_min <- complete_data %>%
+  select(pseudo_ID, Date, Total.ST.min) %>%
+  group_by(pseudo_ID, Date) %>%
+  summarise(Total.ST.min = sum(Total.ST.min, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = pseudo_ID, values_from = Total.ST.min, values_fill = NA) %>%
+  right_join(data.frame(Date = date_seq), by = "Date") %>%
+  arrange(Date)
+
+
+# 对Social.ST.min, Pickups, Proportion.ST, procrastination_score 也做同样的处理
+
+Social_ST_min <- complete_data %>%
+  select(pseudo_ID, Date, Social.ST.min) %>%
+  group_by(pseudo_ID, Date) %>%
+  summarise(Social.ST.min = sum(Social.ST.min, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = pseudo_ID, values_from = Social.ST.min, values_fill = NA) %>%
+  right_join(data.frame(Date = date_seq), by = "Date") %>%
+  arrange(Date)
+
+Pickups <- complete_data %>%
+  select(pseudo_ID, Date, Pickups) %>%
+  group_by(pseudo_ID, Date) %>%
+  summarise(Pickups = sum(Pickups, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = pseudo_ID, values_from = Pickups, values_fill = NA) %>%
+  right_join(data.frame(Date = date_seq), by = "Date") %>%
+  arrange(Date)
+
+Proportion_ST <- complete_data %>%
+  select(pseudo_ID, Date, Proportion.ST) %>%
+  group_by(pseudo_ID, Date) %>%
+  summarise(Proportion.ST = sum(Proportion.ST, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = pseudo_ID, values_from = Proportion.ST, values_fill = NA) %>%
+  right_join(data.frame(Date = date_seq), by = "Date") %>%
+  arrange(Date)
+
+procrastination_score <- complete_data %>%
+  select(pseudo_ID, Date, procrastination_score) %>%
+  group_by(pseudo_ID, Date) %>%
+  summarise(procrastination_score = sum(procrastination_score, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = pseudo_ID, values_from = procrastination_score, values_fill = NA) %>%
+  right_join(data.frame(Date = date_seq), by = "Date") %>%
+  arrange(Date)
+
+
+# 创建一个shiny app，将所有pseudo_ID的数据绘制在同一个图中，每个pseudo_ID用不同的颜色表示 从Total.ST.min, Social.ST.min,Proportion_ST,Pickups 中选择一个变量，选取对应的数据集，绘制在一个时间轴上，使用ggplot2,
+# 每个pseudo_ID用不同的颜色表示
+
+ui <- fluidPage(
+  titlePanel("Time Series Plot"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choose a variable:",
+                  choices = c("Total.ST.min", "Social.ST.min", "Pickups", "Proportion.ST", "procrastination_score"))
+    ),
+    
+    mainPanel(
+      plotOutput("time_series")
+    )
+  )
+)
+
+server <- function(input, output) {
+  
+  output$time_series <- renderPlot({
+    variable <- input$variable
+    
+    data <- switch(variable,
+                   "Total.ST.min" = Total_ST_min,
+                   "Social.ST.min" = Social_ST_min,
+                   "Pickups" = Pickups,
+                   "Proportion.ST" = Proportion_ST,
+                   "procrastination_score" = procrastination_score)
+    
+    data %>%
+      pivot_longer(cols = -Date, names_to = "pseudo_ID", values_to = variable) %>%
+      ggplot(aes(x = Date, y = !!sym(variable), color = pseudo_ID)) +
+      geom_line() +
+      labs(title = variable, x = "Date", y = variable, color = "pseudo_ID") +
+      theme_bw() +
+      theme(legend.position = "none")
+  })
+}
+
+shinyApp(ui, server)
+
+```
+
+
+
+# Discarded modeling part
+
+```{r}
+
+# 去掉 complete data with date中 的0604个体
+
+complete_data_with_date <- complete_data_with_date %>%
+  filter(pseudo_ID != "0604")
+
+# 根据每个pseudo_ID 分组后建立每个pickups的一阶滞后项对数
+
+complete_data_with_date <- complete_data_with_date %>%
+  group_by(pseudo_ID) %>%
+  mutate(Pickups_lag1 = lag(Pickups, 1),
+         Pickups_lag1_log = log(Pickups_lag1),
+         Total.ST.min.log = log(Total.ST.min) ) %>%
+  ungroup()
+
+
+library(lme4)
+
+
+model <- glmer(Pickups ~ -1+Pickups_lag1_log+Treatment + Phase + Total.ST.min.log  + Proportion.ST +
+               Semester  +  Xt + sex + (1 | pseudo_ID),
+               data = complete_data, family = poisson(link = "log"))
+
+
+summary(model)
+```
+
+
+```{r}
+
+#
+
+save(complete_data_with_date, file = "complete_data_date.RData")
+
+load("complete_data_date.RData")
+
+Intervention_begin_date = as.Date("2024-03-27")
+
+complete_data_with_date$relative_date <- complete_data_with_date$Date - Intervention_begin_date
+
+# detach(package:caret)
+# detach(package:jomo)
+# 
+# detach(package:lme4)
+library(nlme)
+# 
+# detach(package:lme4, unload=TRUE)
+
+complete_data_with_date %>% filter(pseudo_ID != 957) -> complete_data_with_date_without_957
+
+model_lme  <- lme(
+  Pickups ~ Phase + log(Total.ST.min) + Proportion.ST + Semester + Xt + sex,
+  random = ~ 1 | pseudo_ID,
+  correlation = corAR1(form = ~ relative_date |
+                         pseudo_ID),
+  data = complete_data_with_date_without_957,
+  method = "ML"
+)
+summary(model_lme)
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

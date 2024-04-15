@@ -1,0 +1,116 @@
+---
+title: "620PROJECT2"
+author: "Xinyu Zhang"
+date: "2024-04-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+*Data Cleaning*
+```{r}
+library(glm2)
+library(readxl)
+library(mice)
+library(dplyr)
+
+sheet1 = read_excel("Fulldata_620W24_Project2(2).xlsx",sheet=1)
+sheet2 = read_excel("Fulldata_620W24_Project2(2).xlsx",sheet=2)
+
+sheet1$pseudo_ID <- as.character(sheet1$pseudo_ID)
+sheet2$pseudo_ID <- as.character(sheet2$pseudo_id)
+
+merged_data <- left_join(sheet1, sheet2, by = "pseudo_ID")
+
+data = merged_data %>% mutate(Phase = ifelse(is.na(compliance), 0, 1),
+                                             Xt = ifelse(Day %in% c("6", "7"), 0, 1),
+                                             Proportion.ST = Social.ST.min/Total.ST.min)
+
+data$Date = data$Date %>% as.Date(.,format="%Y/%m/%d")
+
+data$Semester <- ifelse(data$Date > as.Date("2024-01-09") & !(data$Date >= as.Date("2024-02-24") & data$Date <= as.Date("2024-03-04")), 1, 0)
+
+
+select_V <- c("pseudo_ID","Total.ST.min","Social.ST.min","Pickups","Proportion.ST","Treatment","sex","pets","devices","procrastination_score", "Phase", "Xt","Semester","Date")
+final_data <- data %>% filter(pseudo_ID != 1329 &
+                              pseudo_ID != 2520 &
+                              pseudo_ID != 2880 &
+                              pseudo_ID != 6759 &
+                              pseudo_ID != 8622 & 
+                              pseudo_ID != 9285 & 
+                              pseudo_ID != 2059 & 
+                              pseudo_ID != 0604 & 
+                              pseudo_ID != 9680) %>% select(all_of(select_V)) 
+sum(is.na(final_data))
+
+```
+*Imput data*
+```{r}
+library(mice)
+mi.dat <- mice(final_data, method = "pmm", m = 10)
+summary(mi.dat)
+complete_data <- complete(mi.dat)
+sum(is.na(complete_data))
+```
+
+```{r}
+complete_data$success <- ifelse(complete_data$Treatment == 'A' & complete_data$Social.ST.min > 200, 1,
+                         ifelse(complete_data$Treatment == 'A' & complete_data$Social.ST.min <= 200, 0,
+                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups > 50, 1,
+                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups <= 50, 0, NA))))
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(Pickups_lag = lag(Pickups, order_by = Date))
+save(complete_data, file = "complete_data3.RData")
+
+data_A = complete_data %>% filter(Treatment == "A")
+data_B = complete_data %>% filter(Treatment == "B")
+
+```
+
+
+
+# Cusory Analysis
+*Baseline*
+```{r}
+poisson_model_A <- glm(Pickups ~ log(Pickups_lag) + Phase + Total.ST.min  + Proportion.ST 
+                       + sex + pets + devices + procrastination_score + Xt+ Semester, 
+                       family = "poisson", data = data_A, 
+                       offset = (log(Total.ST.min)))
+summary(poisson_model_A)
+
+poisson_model_B <- glm(Pickups ~ log(Pickups_lag) + Phase + Total.ST.min  + Proportion.ST 
+                       + sex + pets + devices + procrastination_score + Xt+ Semester, 
+                       family = "poisson", data = data_B, 
+                       offset = (log(Total.ST.min)))
+summary(poisson_model_B)
+
+poisson_model_AB <- glm(Pickups ~ log(Pickups_lag) + Phase + Total.ST.min  + Proportion.ST 
+                        + sex + pets + devices + procrastination_score + Xt+ Semester, 
+                        family = "poisson", data = complete_data, 
+                        offset = (log(Total.ST.min)))
+summary(poisson_model_AB)
+```
+```{r}
+library(lme4)
+
+model_A <- lmer(Pickups ~ log(Pickups_lag) + Phase + Total.ST.min + Proportion.ST 
+                + sex + pets + devices + procrastination_score + Xt+ Semester+ 
+                (1 + Phase | pseudo_ID), data = data_A)
+
+summary(model_A)
+
+if(!requireNamespace("lmerTest", quietly = TRUE)) {
+  install.packages("lmerTest")
+}
+library(lmerTest)
+
+anova(model_A)
+
+plot(residuals(model_A) ~ fitted(model_A))
+
+qqnorm(residuals(model_A))
+qqline(residuals(model_A))
+```
+

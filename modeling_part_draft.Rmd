@@ -1,0 +1,90 @@
+---
+title: "Modeling_part_draft"
+author: "Bulun Te"
+date: "2024-04-15"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+
+## Longitudinal Possion Regression with  random effect
+
+
+```{r}
+
+# constructing variable
+load("complete_data3.RData")
+
+complete_data  = complete_data %>% mutate(
+  compliance = Phase * success,
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min)
+)
+
+
+```
+
+```{r}
+
+library(lme4)
+
+
+model <-
+  glmer(
+    Pickups ~  Pickups_lag_log + Treatment + compliance + Proportion.ST + Semester  +  Xt + sex  + procrastination_score +devices+offset(log(Total.ST.min)) + (1+Pickups_lag_log+ Proportion.ST+Semester   |pseudo_ID ),
+    data = complete_data,
+    family = poisson(link = "log")
+  )
+
+summary(model)
+car::vif(model)
+
+```
+
+## using nlme to include random slope
+
+
+```{r}
+
+# removing the library lme4 becase of conflict with nlme
+
+#detach(package:jomo)
+
+detach(package:lme4)
+
+library(nlme)
+
+Intervention_begin_date = as.Date("2024-03-27")
+complete_data$relative_date <- complete_data$Date - Intervention_begin_date
+
+duplicated_dates <- complete_data %>%
+    group_by(pseudo_ID, relative_date) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    filter(count > 1)
+duplicated_dates %>% print(.,n=100)
+
+# remove 957 first because of duplication
+
+#complete_data %>% filter(pseudo_ID != 957) -> complete_data_without_957
+
+model_lme  <- lme(
+  Pickups ~ compliance + Treatment + log(Total.ST.min) + Proportion.ST + Semester + Xt + sex,
+  random = ~ log(Total.ST.min)+ Proportion.ST+compliance| pseudo_ID,
+  correlation = corAR1(form = ~ 1 |
+                         pseudo_ID),
+  data = complete_data,
+  method = "ML"
+)
+summary(model_lme)
+
+
+# 22710.35	22825.15	-11335.17	
+
+```

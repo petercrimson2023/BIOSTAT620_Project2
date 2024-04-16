@@ -54,6 +54,8 @@ complete_data <- complete(mi.dat)
 sum(is.na(complete_data))
 ```
 
+
+
 ```{r}
 complete_data$success <- ifelse(complete_data$Treatment == 'A' & complete_data$Social.ST.min > 200, 1,
                          ifelse(complete_data$Treatment == 'A' & complete_data$Social.ST.min <= 200, 0,
@@ -62,7 +64,39 @@ complete_data$success <- ifelse(complete_data$Treatment == 'A' & complete_data$S
 complete_data <- complete_data %>% 
   group_by(pseudo_ID) %>% 
   mutate(Pickups_lag = lag(Pickups, order_by = Date))
-save(complete_data, file = "complete_data3.RData")
+
+# 2307_1_5094_0
+complete_data <- complete_data %>% mutate(sex = if_else(pseudo_ID == 2307,1,sex)) %>% 
+  mutate(sex = if_else(pseudo_ID == 5094,0,sex))
+save(complete_data, file = "complete_data3_2307_1_5094_0.RData")
+
+# 2307_1_5094_1
+complete_data <- complete_data %>% mutate(sex = if_else(pseudo_ID == 2307,1,sex)) %>% 
+  mutate(sex = if_else(pseudo_ID == 5094,1,sex))
+save(complete_data, file = "complete_data3_2307_1_5094_1.RData")
+
+# 2307_0_5094_0
+complete_data <- complete_data %>% mutate(sex = if_else(pseudo_ID == 2307,0,sex)) %>% 
+  mutate(sex = if_else(pseudo_ID == 5094,0,sex))
+save(complete_data, file = "complete_data3_2307_0_5094_0.RData")
+
+# 2307_0_5094_1
+complete_data <- complete_data %>% mutate(sex = if_else(pseudo_ID == 2307,0,sex)) %>% 
+  mutate(sex = if_else(pseudo_ID == 5094,1,sex))
+save(complete_data, file = "complete_data3_2307_0_5094_1.RData")
+
+#without 2307 5094
+
+complete_data <- complete_data %>% filter(pseudo_ID != 2307 & pseudo_ID != 5094)
+save(complete_data, file = "complete_data3_without_2307_5094.RData")
+
+# without_ 7575
+complete_data <- complete_data %>% mutate(sex = if_else(pseudo_ID == 2307,1,sex)) %>% 
+  mutate(sex = if_else(pseudo_ID == 5094,0,sex))
+complete_data <- complete_data %>% filter(pseudo_ID != 7575)
+save(complete_data, file = "complete_data3_without_7575.RData")
+
+
 
 data_A = complete_data %>% filter(Treatment == "A")
 data_B = complete_data %>% filter(Treatment == "B")
@@ -92,6 +126,7 @@ poisson_model_AB <- glm(Pickups ~ log(Pickups_lag) + Phase + Total.ST.min  + Pro
                         offset = (log(Total.ST.min)))
 summary(poisson_model_AB)
 ```
+
 ```{r}
 library(lme4)
 

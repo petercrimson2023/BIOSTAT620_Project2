@@ -1,0 +1,78 @@
+---
+title: "logistic_modeling"
+author: "Bulun Te"
+date: "2024-04-16"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## using logistic mixed effect model to model the longitudinal data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+setwd(here::here())
+```
+
+
+
+```{r}
+
+
+
+# constructing variable
+load("complete_data3_2307_1_5094_0.RData")
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min),
+  is_work_day = Semester * Xt,
+  Treatment_Group = Treatment
+  
+)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date))
+
+
+library(lme4)
+
+model_1_logit <-
+  glmer(
+    success ~ Pickups_lag_log+ Treatment_Group + Phase + Proportion.ST +sex + is_work_day + devices  + (1 + Semester:Xt + Pickups_lag_log |pseudo_ID ),
+    data = complete_data,
+    family = binomial(link = "logit"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
+  )
+
+summary(model_1_logit)
+car::vif(model_1_logit)
+
+residuals(model_1_logit) %>% as.data.frame() -> residuals_table
+
+residuals_table %>% nrow()
+
+std_resid_logit = resid(model_1_logit, type = "deviance")
+
+plot(std_resid_logit ~ fitted(model_1_logit),ylab = "Standardized Residuals", xlab = "Fitted Values", main = "Standardized Residuals vs Fitted Values", col = "blue")
+
+## qqplot
+
+qqnorm(std_resid_logit, main = "Normal Q-Q Plot", col = "blue")
+qqline(std_resid_logit, col = "red")
+
+
+
+```

@@ -11,80 +11,348 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
+library(ggplot2)
+library(patchwork)
+setwd(here::here())
 ```
 
 
-## Longitudinal Possion Regression with  random effect
+# Longitudinal Possion Regression with  random effect
 
+
+## assuming 2307 is male and 5094 is female
+```{r}
+
+
+# constructing variable
+load("complete_data3_2307_1_5094_0.RData")
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min),
+  is_work_day = Semester * Xt,
+  Treatment_Group = Treatment
+  
+)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date))
+
+
+library(lme4)
+
+model_1 <-
+  glmer(
+    Pickups ~ Pickups_lag_log+ Treatment_Group + Phase + Proportion.ST +sex + is_work_day + devices  + (1 + Semester:Xt  |pseudo_ID ),
+    data = complete_data,
+    family = poisson(link = "log"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
+  )
+
+summary(model_1)
+car::vif(model_1)
+
+residuals(model_1) %>% as.data.frame() -> residuals_table
+
+residuals_table %>% nrow()
+
+std_resid = resid(model_1, type = "deviance")
+
+plot(std_resid ~ fitted(model_1),ylab = "Standardized Residuals", xlab = "Fitted Values", main = "Standardized Residuals vs Fitted Values", col = "blue")
+
+## qqplot
+
+qqnorm(std_resid, main = "Normal Q-Q Plot", col = "blue")
+qqline(std_resid, col = "red")
+
+
+# redo the residual and qqplot using ggplot2 and patchwork and combine them together
+
+p1 <- ggplot(residuals_table, aes(x = fitted(model_1), y = std_resid)) +
+  geom_point(color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Fitted Values", y = "Standardized Residuals",
+       title = "Standardized Residuals vs Fitted Values") +
+  theme_minimal()
+
+# QQ图
+p2 <- ggplot(residuals_table, aes(sample = std_resid)) +
+  stat_qq(color = "blue") +
+  stat_qq_line(color = "red") +
+  labs(x = "Theoretical Quantiles", y = "Sample Quantiles",
+       title = "Normal Q-Q Plot") +
+  theme_minimal()
+
+
+#library(ggplot2)
+#library(stringr)
+
+coef_data <- data.frame(
+  term = names(fixef(model_1)),
+  estimate = fixef(model_1),
+  conf.low = fixef(model_1) - 1.96 * sqrt(diag(vcov(model_1))),
+  conf.high = fixef(model_1) + 1.96 * sqrt(diag(vcov(model_1)))
+)
+
+
+forest_plot <- ggplot(coef_data, aes(x = estimate, y = term, xmin = conf.low, xmax = conf.high)) +
+  geom_point(size = 3) +
+  geom_errorbarh(height = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.title.y = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  xlab("Coefficient Estimate") +
+  ggtitle("Forest Plot of Model Coefficients") +
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 20))
+
+
+# ggsave("plots/forest_plot.png", plot = forest_plot, width = 8, height = 6, units = "in")
+
+
+p1 + p2 +forest_plot + plot_layout(ncol = 3)  
+
+#ggsave("plots/model_1_result.png", model_1_result, width = 10, height = 5)
+
+```
+
+## assuming 2307 is male and 5094 is male
 
 ```{r}
 
 # constructing variable
-load("complete_data3.RData")
+load("complete_data3_2307_1_5094_1.RData")
 
 complete_data  = complete_data %>% mutate(
-  compliance = Phase * success,
   Pickups_lag_log = log(Pickups_lag),
   Total.ST.min.log = log(Total.ST.min)
 )
 
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date))
 
-```
-
-```{r}
 
 library(lme4)
 
-
-model <-
+model_2 <-
   glmer(
-    Pickups ~  Pickups_lag_log + Treatment + compliance + Proportion.ST + Semester  +  Xt + sex  + procrastination_score +devices+offset(log(Total.ST.min)) + (1+Pickups_lag_log+ Proportion.ST+Semester   |pseudo_ID ),
+    Pickups ~   Pickups_lag_log +  Treatment + Phase + Proportion.ST +sex + Semester:Xt + devices + sex:log(Total.ST.min.lag) + (1 + Semester:Xt |pseudo_ID ),
     data = complete_data,
-    family = poisson(link = "log")
+    family = poisson(link = "log"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
   )
 
-summary(model)
-car::vif(model)
+summary(model_2)
+
+
 
 ```
 
-## using nlme to include random slope
-
+## assuming 2307 is female and 5094 is female
 
 ```{r}
 
-# removing the library lme4 becase of conflict with nlme
+# constructing variable
+load("complete_data3_2307_0_5094_0.RData")
 
-#detach(package:jomo)
-
-detach(package:lme4)
-
-library(nlme)
-
-Intervention_begin_date = as.Date("2024-03-27")
-complete_data$relative_date <- complete_data$Date - Intervention_begin_date
-
-duplicated_dates <- complete_data %>%
-    group_by(pseudo_ID, relative_date) %>%
-    summarise(count = n(), .groups = "drop") %>%
-    filter(count > 1)
-duplicated_dates %>% print(.,n=100)
-
-# remove 957 first because of duplication
-
-#complete_data %>% filter(pseudo_ID != 957) -> complete_data_without_957
-
-model_lme  <- lme(
-  Pickups ~ compliance + Treatment + log(Total.ST.min) + Proportion.ST + Semester + Xt + sex,
-  random = ~ log(Total.ST.min)+ Proportion.ST+compliance| pseudo_ID,
-  correlation = corAR1(form = ~ 1 |
-                         pseudo_ID),
-  data = complete_data,
-  method = "ML"
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min)
 )
-summary(model_lme)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date))
 
 
-# 22710.35	22825.15	-11335.17	
+library(lme4)
+
+model_3 <-
+  glmer(
+    Pickups ~   Pickups_lag_log +  Treatment + Phase + Proportion.ST +sex + Semester:Xt + devices + sex:log(Total.ST.min.lag) + (1 + Semester:Xt |pseudo_ID ),
+    data = complete_data,
+    family = poisson(link = "log"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
+  )
+
+summary(model_3)
+
 
 ```
+
+# assuming 2307 is female and 5094 is male
+
+```{r}
+
+# constructing variable
+load("complete_data3_2307_0_5094_1.RData")
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min)
+)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date))
+
+
+library(lme4)
+
+model_4 <-
+  glmer(
+    Pickups ~   Pickups_lag_log +  Treatment + Phase + Proportion.ST +sex + Semester:Xt + devices + sex:log(Total.ST.min.lag) + (1 + Semester:Xt |pseudo_ID ),
+    data = complete_data,
+    family = poisson(link = "log"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
+  )
+
+summary(model_4)
+
+
+```
+
+### AIC,BIC,Likelihood comparison of the model 1-4
+
+```{r}
+
+AIC(model_1,model_2,model_3,model_4) %>% t() %>% as.data.frame() -> AIC_table
+BIC(model_1,model_2,model_3,model_4) %>% t() %>% as.data.frame() -> BIC_table
+
+rbind(AIC_table,BIC_table) %>% knitr::kable()
+
+```
+
+model 1 has the minimum AIC and BIC values. So, we will use model 1 for further analysis.
+
+
+
+
+# without 7575
+```{r}
+
+# without 7575
+
+load("complete_data3_without_7575.RData")
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min)
+)
+
+# run under model 1
+
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date))
+
+
+library(lme4)
+
+model_1_without_7575 <-
+  glmer(
+    Pickups ~   Pickups_lag_log +  Treatment + Phase + Proportion.ST +sex + Semester:Xt + devices + sex:log(Total.ST.min.lag) + (1 + Semester:Xt + Pickups_lag_log + log(Total.ST.min.lag)  |pseudo_ID ),
+    data = complete_data,
+    family = poisson(link = "log"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
+  )
+
+
+# plot
+
+std_resid_1 = resid(model_1_without_7575,type="deviance")
+
+plot(std_resid_1 ~ fitted(model_1_without_7575),ylab = "Standardized Residuals", xlab = "Fitted Values", main = "Standardized Residuals vs Fitted Values", col = "blue")
+
+# qq plot with y=x line
+
+qqnorm(std_resid_1, main = "Normal Q-Q Plot", col = "blue")
+qqline(std_resid_1, col = "red")
+
+
+summary(model_1_without_7575)
+
+p1 <- ggplot(data.frame(fitted = fitted(model_1_without_7575), std_resid = std_resid_1),
+             aes(x = fitted, y = std_resid)) +
+  geom_point(color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Fitted Values", y = "Standardized Residuals",
+       title = "Standardized Residuals vs Fitted Values") +
+  theme_minimal()
+
+p2 <- ggplot(data.frame(std_resid = std_resid_1), aes(sample = std_resid)) +
+  stat_qq(color = "blue") +
+  stat_qq_line(color = "red") +
+  labs(x = "Theoretical Quantiles", y = "Sample Quantiles",
+       title = "Normal Q-Q Plot") +
+  theme_minimal()
+
+
+coef_data <- data.frame(
+  term = names(fixef(model_1_without_7575)),
+  estimate = fixef(model_1_without_7575),
+  conf.low = fixef(model_1_without_7575) - 1.96 * sqrt(diag(vcov(model_1_without_7575))),
+  conf.high = fixef(model_1_without_7575) + 1.96 * sqrt(diag(vcov(model_1_without_7575)))
+)
+
+
+forest_plot <- ggplot(coef_data, aes(x = estimate, y = term, xmin = conf.low, xmax = conf.high)) +
+  geom_point(size = 3) +
+  geom_errorbarh(height = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.title.y = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  xlab("Coefficient Estimate") +
+  ggtitle("Forest Plot of Model Coefficients") +
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 20))
+
+
+(p1 + p2 +forest_plot+ plot_layout(ncol = 3) ) %>% ggsave("plots/model_1_without_7575.png",., width = 10, height = 5)
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

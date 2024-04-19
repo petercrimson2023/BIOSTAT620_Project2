@@ -10,6 +10,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(lang = "en")
 ```
 
 
@@ -157,19 +158,299 @@ shinyApp(ui, server)
 
 ```{r}
 
-# 创建一个数据集，包含每个pseudo_ID的Total.ST.min, Social.ST.min, Pickups, Porportion.ST的众数和sex
-# 创建一个 shiny app 绘制 Total.ST.min, Social.ST.min, Pickups, Porportion.ST的众数和根据不同的sex分类时的柱形图，使用ggplot2
+#通过一个循环，将complete_data中 每个pseudo_ID 的起始日期全部选出，并找到最晚的日期
 
-# 创建一个数据集，包含每个pseudo_ID的Total.ST.min, Social.ST.min, Pickups, Porportion.ST的众数和sex
+id_start_date <- complete_data %>%
+  group_by(pseudo_ID) %>%
+  summarise(start_date = min(Date)) %>% select(start_date)
+
+# 找出最晚的日期
+where_max_date = id_start_date %>% unlist() %>% which.max() 
+
+start_date = id_start_date[where_max_date,"start_date"] %>% pull()
+
+end_date = as.Date("2024-03-27")
+
+common_dates = seq.Date(from = start_date[1], to = end_date, by = "day")
 
 
+# 创建一个新的数据集 Total_ST_min，使用common_dates作为时间轴，选取compelte_data_with_date中每个pseudo_id的Total.St.min,
+# 如果该日期下Total.ST.min为空，则用NA填充
+
+summarize_and_pivot <- function(data, value_col, common_dates) {
+  data %>%
+    select(pseudo_ID, Date, !!sym(value_col)) %>%
+    group_by(pseudo_ID, Date) %>%
+    summarise("Total" = sum(!!sym(value_col), na.rm = TRUE), .groups = 'drop') %>%
+    pivot_wider(names_from = pseudo_ID, values_from = Total, values_fill = list(Total = NA)) %>%
+    right_join(data.frame(Date = common_dates), by = "Date") %>%
+    arrange(Date)
+}
+
+Total_ST_min_common =summarize_and_pivot(complete_data, "Total.ST.min", common_dates)
+Social_ST_min_common=summarize_and_pivot(complete_data, "Social.ST.min", common_dates) 
+Pickups_common=summarize_and_pivot(complete_data, "Pickups", common_dates)
+Proportion_ST_common= summarize_and_pivot(complete_data, "Proportion.ST", common_dates) 
+
+```
+
+
+```{r}
+
+
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# 定义UI
+ui <- fluidPage(
+  titlePanel("Time Series Plot"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choose a variable:",
+                  choices = c("Total.ST.min" = "Total_ST_min_common",
+                              "Social.ST.min" = "Social_ST_min_common",
+                              "Pickups" = "Pickups_common",
+                              "Proportion.ST" = "Proportion_ST_common",
+                              "procrastination_score" = "procrastination_score_common"))
+    ),
+    mainPanel(
+      plotOutput("time_series")
+    )
+  )
+)
+
+# 定义Server逻辑
+server <- function(input, output) {
+  output$time_series <- renderPlot({
+    variable <- input$variable
     
+    # 获取相应的数据集，假设数据集已以正确的名称在全局环境中加载
+    data <- get(variable, envir = globalenv())
+    
+    # 转换数据为长格式（如果还未转换的话）
+    data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
+    
+    # 绘制图表
+    ggplot(data, aes(x = Date, y = value, color = pseudo_ID)) +
+      geom_line() +
+      labs(title = variable, x = "Date", y = "value", color = "pseudo_ID") +
+      theme_bw() +
+      theme(legend.position = "none")
+  })
+}
+
+# 运行Shiny应用
+shinyApp(ui, server)
+
+
+```
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# 定义UI
+ui <- fluidPage(
+  titlePanel("Time Series Plot with Mean Line"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choose a variable:",
+                  choices = c("Total.ST.min" = "Total_ST_min_common",
+                              "Social.ST.min" = "Social_ST_min_common",
+                              "Pickups" = "Pickups_common",
+                              "Proportion.ST" = "Proportion_ST_common",
+                              "procrastination_score" = "procrastination_score_common"))
+    ),
+    mainPanel(
+      plotOutput("time_series")
+    )
+  )
+)
+
+# 定义Server逻辑
+server <- function(input, output) {
+  output$time_series <- renderPlot({
+    variable <- input$variable
+    
+    # 获取相应的数据集
+    data <- get(variable, envir = globalenv())
+    
+    # 转换数据为长格式
+    data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
+    
+    # 计算均值
+    mean_data <- data %>%
+      group_by(Date) %>%
+      summarise(mean_value = mean(value, na.rm = TRUE))
+    
+    # 绘制图表
+    ggplot() +
+      geom_line(data = data, aes(x = Date, y = value, group = pseudo_ID), color = "grey", alpha = 0.5) +
+      geom_line(data = mean_data, aes(x = Date, y = mean_value), color = "red", size = 1.2) +
+      labs(title = paste("Time Series of", variable), x = "Date", y = "value", color = "Pseudo ID") +
+      theme_bw() +
+      theme(legend.position = "none")
+  })
+}
+
+# 运行Shiny应用
+shinyApp(ui, server)
 
 
 
 ```
 
 
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# 定义UI
+ui <- fluidPage(
+  titlePanel("Time Series Plot with Gender-Specific Mean Lines"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choose a variable:",
+                  choices = c("Total.ST.min" = "Total_ST_min_common",
+                              "Social.ST.min" = "Social_ST_min_common",
+                              "Pickups" = "Pickups_common",
+                              "Proportion.ST" = "Proportion_ST_common",
+                              "procrastination_score" = "procrastination_score_common"))
+    ),
+    mainPanel(
+      plotOutput("time_series")
+    )
+  )
+)
+
+# 定义Server逻辑
+server <- function(input, output) {
+  output$time_series <- renderPlot({
+    variable <- input$variable
+    
+    # 获取相应的数据集
+    data <- get(variable, envir = globalenv())
+    
+    # 转换数据为长格式
+    data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
+    
+    # 获取性别信息，假设存在一个data.frame `sex_info` 包含 columns `pseudo_ID` 和 `sex`
+    sex_info <- complete_data %>%
+      select(pseudo_ID, sex) %>%
+      distinct(pseudo_ID, .keep_all = TRUE)
+    
+    # 将性别信息合并到数据中
+    data <- left_join(data, sex_info, by = "pseudo_ID")
+    
+    # 计算性别特定均值，只对性别为0和1
+    mean_data <- data %>%
+      filter(sex %in% c(0, 1)) %>%  # 筛选性别为0和1的数据
+      group_by(Date, sex) %>%
+      summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
+    
+    # 绘制图表
+    ggplot(data, aes(x = Date, y = value)) +
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条
+      geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(sex)), size = 1.2) +  # 性别特定均值线条
+      scale_color_manual(values = c("0" = "blue", "1" = "red"), labels = c("0" = "Female", "1" = "Male")) +
+      labs(title = paste("Time Series of", variable), x = "Date", y = "value", color = "Gender") +
+      theme_bw() +
+      theme(legend.position = "right")
+  })
+}
+
+# 运行Shiny应用
+shinyApp(ui, server)
+
+```
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+ui <- fluidPage(
+  titlePanel("Time Series Plot with Semester-Specific Mean Lines"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choose a variable:",
+                  choices = c("Total.ST.min" = "Total_ST_min_common",
+                              "Social.ST.min" = "Social_ST_min_common",
+                              "Pickups" = "Pickups_common",
+                              "Proportion.ST" = "Proportion_ST_common",
+                              "procrastination_score" = "procrastination_score_common"))
+    ),
+    mainPanel(
+      plotOutput("time_series")
+    )
+  )
+)
+
+server <- function(input, output) {
+  output$time_series <- renderPlot({
+    variable <- input$variable
+    
+    # 获取相应的数据集
+    data <- get(variable, envir = globalenv())
+    
+    # 转换数据为长格式
+    data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
+    
+    # 获取学期信息，假设存在一个data.frame `semester_info` 包含 columns `pseudo_ID` 和 `Semester`
+    semester_info <- complete_data %>%
+      select(pseudo_ID, Semester) %>%
+      distinct(pseudo_ID, .keep_all = TRUE)
+    
+    # 将学期信息合并到数据中
+    data <- left_join(data, semester_info, by = "pseudo_ID")
+    
+    # 计算学期特定均值，只对学期为0和1
+    mean_data <- data %>%
+      filter(Semester %in% c(0, 1)) %>%
+      group_by(Date, Semester) %>%
+      summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
+    
+    # 绘制图表
+    ggplot(data, aes(x = Date, y = value)) +
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条
+      geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(Semester)), size = 1.2) +  # 学期特定均值线条
+      scale_color_manual(values = c("0" = "blue", "1" = "red"), labels = c("0" = "Semester 1", "1" = "Semester 2")) +
+      labs(title = paste("Time Series of", variable), x = "Date", y = "value", color = "Semester") +
+      theme_bw() +
+      theme(legend.position = "right")
+  })
+}
+
+shinyApp(ui, server)
+
+
+
+```
+
+
+```{r}
+
+# 选出 complete_data中Semester=0，且日期大于1月15号的Date
+
+semester_0_start_date <- complete_data %>%
+  filter(Semester == 0, Date > as.Date("2024-01-15")) %>% 
+  pull(Date) %>% unique()
+
+
+
+
+```
 
 ## plotting the lines
 

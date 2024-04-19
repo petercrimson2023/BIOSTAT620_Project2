@@ -76,3 +76,238 @@ qqline(std_resid_logit, col = "red")
 
 
 ```
+
+
+```{r}
+
+if (!require("geepack")) {
+  install.packages("geepack")
+}
+
+library(geepack)
+
+load("complete_data3_2307_0_5094_0.RData")
+
+data_case = complete_data %>% filter(Phase == 1)
+
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min)
+)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date),
+         Total.ST.min.center = Total.ST.min - mean(Total.ST.min)
+         )
+
+data_B = complete_data %>% filter(Treatment == "B")
+
+
+model_gee_1 <- geeglm(
+  success ~  Proportion.ST + sex:log(Total.ST.min) + sex+ devices + procrastination_score,
+  data = data_B,
+  family = binomial(link = "logit"),
+  id = pseudo_ID,  # 群体（cluster）标识符
+  corstr = "ar1"  # 假设群体内的相关结构为等交换的
+)
+
+summary(model_gee_1)
+
+
+```
+
+```{r}
+
+
+load("complete_data3_2307_0_5094_0.RData")
+
+complete_data %>% filter(pseudo_ID == 5094) %>% ungroup() %>% select(Date,Pickups) -> data_5094
+
+#data_5094 %>% plot()
+
+data_5094$Pickups %>% smooth.spline() -> smooth_5094
+
+id_list = complete_data %>% select(pseudo_ID) %>% distinct() %>% pull()
+
+for(i in id_list){
+  #print(i)
+  diff(complete_data %>% filter(pseudo_ID == i) %>% ungroup() %>% select(Pickups) %>% pull()) -> diff_series
+  var_diff = var(diff_series)
+  mean_diff = mean(diff_series)
+  cat(c(i,mean_diff,var_diff,"\n"))
+  
+}
+
+# test if   
+
+```
+
+
+# Binomial Data regression
+
+```{r}
+
+load("complete_data3_2307_0_5094_0.RData")
+
+complete_data$success_loose <- ifelse(complete_data$Treatment == 'A' & complete_data$Total.ST.min <= 300, 1,
+                         ifelse(complete_data$Treatment == 'A' & complete_data$Total.ST.min >300, 0,
+                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups <= 75, 1,
+                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups > 75, 0, NA))))
+
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min),
+  is_work_day = Semester * Xt
+)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date),
+         Social.ST.min.lag = lag(Social.ST.min, order_by = Date)
+  )
+
+# filter two people because of missingness of pre intervention period
+
+complete_data <- complete_data %>% filter(pseudo_ID != 8622 & pseudo_ID != 9680)
+
+```
+
+
+
+```{r}
+# constructing average variables
+
+complete_data %>% filter(Phase == 0 ) %>%
+  group_by(pseudo_ID) %>% 
+  summarise(
+    mean_Pickups = mean(Pickups),
+    mean_Total.ST.min = mean(Total.ST.min),
+    mean_Social.ST.min = mean(Social.ST.min),
+    mean_Proportion.ST = mean(Proportion.ST),
+    mean_success_loose = mean(success_loose)
+  ) -> average_data
+
+complete_data %>% filter(Phase == 1) %>% 
+  group_by(pseudo_ID) %>% 
+  summarise(
+    compliance_num = sum(success),
+    test_days = n()
+  ) -> compliance_data
+
+
+complete_data_with_average <- complete_data %>% left_join(average_data, by = "pseudo_ID")
+
+complete_data_with_average <- complete_data_with_average %>% left_join(compliance_data, by = "pseudo_ID")
+
+```
+
+
+```{r}
+
+
+# Check number of the Phase == 1 period dates grouped by each pseudo_ID
+
+complete_data_with_average %>% filter(Phase == 1) %>% select(pseudo_ID, Date) %>% distinct() %>% group_by(pseudo_ID) %>% summarise(n = n())
+
+
+```
+
+```{r}
+
+
+# find the common dates of all psedu_ID`s compliance dates
+
+complete_data_with_average %>% filter(Phase == 1)%>% 
+  group_by(pseudo_ID) %>% select(Date) %>% summarise(
+  min_date = min(Date),
+  max_date = max(Date)
+) -> date_range
+
+max_common_date = as.Date("2024-04-02")
+
+complete_data_with_average = complete_data_with_average %>% mutate(
+  common_phase = ifelse(Date <= max_common_date & Phase == 1,1,0)
+)
+
+success_count_data = complete_data_with_average %>% filter(common_phase == 1) %>% group_by(pseudo_ID) %>% summarise(
+  success_count = sum(success)
+)
+
+
+complete_data_with_average = complete_data_with_average %>% left_join(success_count_data, by = "pseudo_ID")
+
+
+# check success count grouped by pseudo_ID in complete_data_with_average
+
+complete_data_with_average %>% filter(common_phase == 1) %>% group_by(pseudo_ID) %>% summarise(
+  success_count = sum(success)
+) %>% arrange(success_count) %>% print(n = 100)
+
+```
+
+
+```{r}
+
+complete_data_with_average_before_B = complete_data_with_average %>% 
+  filter(Phase == 0) %>% 
+  filter(Treatment == "B") %>% select(pseudo_ID,
+                                      mean_Pickups,
+                                      mean_Total.ST.min,
+                                      mean_Proportion.ST,
+                                      mean_success_loose,
+                                      compliance_num,
+                                      test_days,
+                                      sex,
+                                      devices,
+                                      procrastination_score,
+                                      pets,
+                                      success_count) %>% distinct()
+
+
+
+complete_data_with_average_before = complete_data_with_average %>% 
+  filter(Phase == 0) %>% select(pseudo_ID,
+                                      mean_Pickups,
+                                      mean_Total.ST.min,
+                                      mean_Proportion.ST,
+                                      mean_success_loose,
+                                      compliance_num,
+                                      test_days,
+                                      sex,
+                                      devices,
+                                      procrastination_score,
+                                      pets,
+                                success_count,
+                                Treatment) %>% distinct()
+```
+
+```{r}
+
+total_days = (max_common_date - as.Date("2024-03-26")) %>% as.numeric()
+
+# assuming the success_count is has binomial distribution of (9,p_i), p_i is the probability of success
+# using glm to construct the model
+
+model_binomial <- glm(
+  cbind(success_count,total_days-success_count) ~ log(mean_Pickups) +log(mean_Total.ST.min) + mean_Proportion.ST + sex + devices + procrastination_score,
+  data = complete_data_with_average_before,
+  family = binomial(link = "logit")
+)
+
+summary(model_binomial)
+
+
+
+```
+
+
+
+
+

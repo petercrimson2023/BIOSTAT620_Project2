@@ -23,11 +23,13 @@ sheet2$pseudo_ID <- as.character(sheet2$pseudo_id)
 
 merged_data <- left_join(sheet1, sheet2, by = "pseudo_ID")
 
-data = merged_data %>% mutate(Phase = ifelse(is.na(compliance), 0, 1),
+merged_data$Date = merged_data$Date %>% as.Date(.,format="%Y/%m/%d")
+
+data = merged_data %>% mutate(Phase = ifelse(Date < as.Date("2024-03-27"), 0, 1),
                                              Xt = ifelse(Day %in% c("6", "7"), 0, 1),
                                              Proportion.ST = Social.ST.min/Total.ST.min)
 
-data$Date = data$Date %>% as.Date(.,format="%Y/%m/%d")
+
 
 data$Semester <- ifelse(data$Date > as.Date("2024-01-09") & !(data$Date >= as.Date("2024-02-24") & data$Date <= as.Date("2024-03-04")), 1, 0)
 
@@ -36,12 +38,10 @@ select_V <- c("pseudo_ID","Total.ST.min","Social.ST.min","Pickups","Proportion.S
 final_data <- data %>% filter(pseudo_ID != 1329 &
                               pseudo_ID != 2520 &
                               pseudo_ID != 2880 &
-                              pseudo_ID != 6759 &
-                              pseudo_ID != 8622 & 
+                              pseudo_ID != 6759 & 
                               pseudo_ID != 9285 & 
                               pseudo_ID != 2059 & 
-                              pseudo_ID != 0604 & 
-                              pseudo_ID != 9680) %>% select(all_of(select_V)) 
+                              pseudo_ID != 0604) %>% select(all_of(select_V)) 
 sum(is.na(final_data))
 
 ```
@@ -57,10 +57,11 @@ sum(is.na(complete_data))
 
 
 ```{r}
-complete_data$success <- ifelse(complete_data$Treatment == 'A' & complete_data$Social.ST.min > 200, 1,
-                         ifelse(complete_data$Treatment == 'A' & complete_data$Social.ST.min <= 200, 0,
-                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups > 50, 1,
-                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups <= 50, 0, NA))))
+complete_data$success <- ifelse(complete_data$Treatment == 'A' & complete_data$Total.ST.min <= 200, 1,
+                         ifelse(complete_data$Treatment == 'A' & complete_data$Total.ST.min > 200, 0,
+                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups <= 50, 1,
+                         ifelse(complete_data$Treatment == 'B' & complete_data$Pickups > 50, 0, NA))))
+
 complete_data <- complete_data %>% 
   group_by(pseudo_ID) %>% 
   mutate(Pickups_lag = lag(Pickups, order_by = Date))
@@ -97,9 +98,9 @@ complete_data <- complete_data %>% filter(pseudo_ID != 7575)
 save(complete_data, file = "complete_data3_without_7575.RData")
 
 
-
-data_A = complete_data %>% filter(Treatment == "A")
-data_B = complete_data %>% filter(Treatment == "B")
+# 
+# data_A = complete_data %>% filter(Treatment == "A")
+# data_B = complete_data %>% filter(Treatment == "B")
 
 ```
 

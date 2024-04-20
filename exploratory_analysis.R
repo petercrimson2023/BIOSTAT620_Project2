@@ -23,55 +23,55 @@ summarize_and_pivot <- function(data, value_col, common_dates) {
 
 plot_time_series_with_means_highlight <- function(data_set, category_info, metric_name, category_variable, 
                                                   highlight_period = FALSE, highlight_dates = NULL) {
-  # 获取相应的数据集，这里假设数据集已经是全局环境中的一个对象
+
   data <- get(data_set, envir = globalenv())
   
-  # 转换数据为长格式
+
   data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
   
-  # 获取分类信息，假设这也是一个全局数据框
+
   category_data <- get(category_info, envir = globalenv()) %>%
     select(pseudo_ID, !!sym(category_variable)) %>%
     distinct(pseudo_ID, .keep_all = TRUE)
   
-  # 将分类信息合并到数据中
+
   data <- left_join(data, category_data, by = "pseudo_ID")
   
-  # 计算分类特定均值
+
   mean_data <- data %>%
     group_by(Date, !!sym(category_variable)) %>%
     summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
   
-  # 开始构建图形对象
+
   plot <- ggplot(data, aes(x = Date, y = value)) +
-    geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条作为背景
+    geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  
     geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(!!sym(category_variable))), size = 1.2)  # 分类均值线条
   
-  # 根据 highlight_period 决定是否高亮显示特定日期
+
   if (highlight_period && !is.null(highlight_dates)) {
     
     highlight_start <- as.Date(highlight_dates[1])
     highlight_end <- as.Date(highlight_dates[2])
     
     plot <- ggplot(data, aes(x = Date, y = value)) +
-      geom_rect(xmin = highlight_start, xmax = highlight_end,  # 先绘制高亮区域
+      geom_rect(xmin = highlight_start, xmax = highlight_end,  
                 ymin = -Inf, ymax = Inf,
                 fill = "green", alpha = 0.5) +
-      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 然后绘制所有人的线条
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) + 
       geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(!!sym(category_variable))), size = 1.2)  # 最后绘制分类均值线条
     
   }
   
-  # 添加图形的其他元素和样式
+
   plot <- plot +
     scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("1" = "Male", "0" = "Female")) +
     labs(title = paste("Time Series of", metric_name), x = "Date", y = metric_name, color = category_variable) +
     theme_bw() +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 14),  # 标题居中并设定大小
+      plot.title = element_text(hjust = 0.5, size = 14),  
       legend.position = "right",
-      legend.title = element_text(size = 12),  # 图例标题放大
-      legend.text = element_text(size = 12)    # 图例文本放大
+      legend.title = element_text(size = 12),  
+      legend.text = element_text(size = 12)   
     )
   # 
   # plot <- plot +
@@ -79,10 +79,10 @@ plot_time_series_with_means_highlight <- function(data_set, category_info, metri
   #   labs(title = paste("Time Series of", metric_name), x = "Date", y = metric_name, color = category_variable) +
   #   theme_bw() +
   #   theme(
-  #     plot.title = element_text(hjust = 0.5, size = 14),  # 标题居中并设定大小
+  #     plot.title = element_text(hjust = 0.5, size = 14),  
   #     legend.position = "right",
-  #     legend.title = element_text(size = 12),  # 图例标题放大
-  #     legend.text = element_text(size = 12)    # 图例文本放大
+  #     legend.title = element_text(size = 12),  
+  #     legend.text = element_text(size = 12)    
   #   )
   # 
   return(plot)
@@ -186,7 +186,6 @@ p4 = ggplot(summary_stats, aes(x = Proportion_mean)) +
 
 #(p1 + p2 + p3 + p4 + plot_layout(ncol = 2, nrow = 2)) %>% ggsave("plots/summary_stats.png",.)
 
-#对上述四个变量，使用ggplot2，绘制箱线图
 
 p5 = ggplot(summary_stats, aes(x = "", y = Total_mean)) +
   geom_boxplot(fill = "blue", color = "black",coef = 1.1) +
@@ -208,7 +207,6 @@ p8 = ggplot(summary_stats, aes(x = "", y = Proportion_mean)) +
   labs(title = "Proportion of Screen Time", x = "", y = "Proportion of Screen Time") +
   theme_minimal()
 
-# 调整图片的宽度，使其存储时，长度大于高度
 
 (p1 + p2 + p3 + p4 +p5 + p6 + p7 + p8 + plot_layout(ncol = 4, nrow = 2)) %>% ggsave("plots/summary_stats_boxplot.png",., width = 10, height = 8, units = "in")
 
@@ -220,7 +218,6 @@ id_start_date <- complete_data %>%
   group_by(pseudo_ID) %>%
   summarise(start_date = min(Date)) %>% select(start_date)
 
-# 找出最晚的日期
 where_max_date = id_start_date %>% unlist() %>% which.max() 
 
 start_date = id_start_date[where_max_date,"start_date"] %>% pull()
@@ -258,55 +255,54 @@ p4 = plot_time_series_with_means_highlight("Proportion_ST_common", "complete_dat
 
 plot_time_series_with_means_highlight <- function(data_set, category_info, metric_name, category_variable, 
                                                   highlight_period = FALSE, highlight_dates = NULL) {
-  # 获取相应的数据集，这里假设数据集已经是全局环境中的一个对象
+ 
   data <- get(data_set, envir = globalenv())
   
-  # 转换数据为长格式
+
   data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
   
-  # 获取分类信息，假设这也是一个全局数据框
+
   category_data <- get(category_info, envir = globalenv()) %>%
     select(pseudo_ID, !!sym(category_variable)) %>%
     distinct(pseudo_ID, .keep_all = TRUE)
-  
-  # 将分类信息合并到数据中
+
   data <- left_join(data, category_data, by = "pseudo_ID")
   
-  # 计算分类特定均值
+
   mean_data <- data %>%
     group_by(Date, !!sym(category_variable)) %>%
     summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
   
-  # 开始构建图形对象
+
   plot <- ggplot(data, aes(x = Date, y = value)) +
-    geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条作为背景
+    geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) + 
     geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(!!sym(category_variable))), size = 1.2)  # 分类均值线条
   
-  # 根据 highlight_period 决定是否高亮显示特定日期
+
   if (highlight_period && !is.null(highlight_dates)) {
     
     highlight_start <- as.Date(highlight_dates[1])
     highlight_end <- as.Date(highlight_dates[2])
     
     plot <- ggplot(data, aes(x = Date, y = value)) +
-      geom_rect(xmin = highlight_start, xmax = highlight_end,  # 先绘制高亮区域
+      geom_rect(xmin = highlight_start, xmax = highlight_end,  
                 ymin = -Inf, ymax = Inf,
                 fill = "green", alpha = 0.5) +
-      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 然后绘制所有人的线条
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  
       geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(!!sym(category_variable))), size = 1.2)  # 最后绘制分类均值线条
     
   }
   
-  # 添加图形的其他元素和样式
+
   # plot <- plot +
   #   scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("1" = "Male", "0" = "Female")) +
   #   labs(title = paste("Time Series of", metric_name), x = "Date", y = metric_name, color = category_variable) +
   #   theme_bw() +
   #   theme(
-  #     plot.title = element_text(hjust = 0.5, size = 14),  # 标题居中并设定大小
+  #     plot.title = element_text(hjust = 0.5, size = 14),  
   #     legend.position = "right",
-  #     legend.title = element_text(size = 12),  # 图例标题放大
-  #     legend.text = element_text(size = 12)    # 图例文本放大
+  #     legend.title = element_text(size = 12),  
+  #     legend.text = element_text(size = 12)   
   #   )
   
 
@@ -315,12 +311,12 @@ plot_time_series_with_means_highlight <- function(data_set, category_info, metri
     labs(title = paste("Time Series of", metric_name), x = "Date", y = metric_name, color = category_variable) +
     theme_bw() +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 20),  # 标题居中并设定大小
+      plot.title = element_text(hjust = 0.5, size = 20),  
       legend.position = "right",
-    axis.title.x = element_text(size = 20),  # x轴标题放大
-    axis.title.y = element_text(size = 20),  # y轴标题放大
-      legend.title = element_text(size = 20),  # 图例标题放大
-      legend.text = element_text(size = 20)# 图例文本放大
+    axis.title.x = element_text(size = 20),  
+    axis.title.y = element_text(size = 20),  
+      legend.title = element_text(size = 20),  
+      legend.text = element_text(size = 20)
     )
 
 
@@ -368,57 +364,55 @@ Pickups_common=summarize_and_pivot(complete_data, "Pickups", common_dates)
 
 plot_time_series_with_means_highlight <- function(data_set, category_info, metric_name, category_variable, 
                                                   highlight_period = FALSE, highlight_dates = NULL) {
-  # 获取相应的数据集，这里假设数据集已经是全局环境中的一个对象
+  
   data <- get(data_set, envir = globalenv())
   
-  # 转换数据为长格式
+
   data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
   
-  # 获取分类信息，假设这也是一个全局数据框
+  
   category_data <- get(category_info, envir = globalenv()) %>%
     select(pseudo_ID, !!sym(category_variable)) %>%
     distinct(pseudo_ID, .keep_all = TRUE)
-  
-  # 将分类信息合并到数据中
+
   data <- left_join(data, category_data, by = "pseudo_ID")
   
-  # 计算分类特定均值
+
   mean_data <- data %>%
     group_by(Date, !!sym(category_variable)) %>%
     summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
   
-  # 开始构建图形对象
+
   plot <- ggplot(data, aes(x = Date, y = value)) +
-    geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条作为背景
+    geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  
     geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(!!sym(category_variable))), size = 1.2)  # 分类均值线条
   
-  # 根据 highlight_period 决定是否高亮显示特定日期
+
   if (highlight_period && !is.null(highlight_dates)) {
     
     highlight_start <- as.Date(highlight_dates[1])
     highlight_end <- as.Date(highlight_dates[2])
     
     plot <- ggplot(data, aes(x = Date, y = value)) +
-      geom_rect(xmin = highlight_start, xmax = highlight_end,  # 先绘制高亮区域
+      geom_rect(xmin = highlight_start, xmax = highlight_end,  
                 ymin = -Inf, ymax = Inf,
                 fill = "green", alpha = 0.5) +
-      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 然后绘制所有人的线条
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  
       geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(!!sym(category_variable))), size = 1.2)  # 最后绘制分类均值线条
     
   }
-  
-  # 添加图形的其他元素和样式
+
   plot <- plot +
     scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("1" = "Male", "0" = "Female")) +
     labs(title = paste("Time Series of", metric_name), x = "Date", y = metric_name, color = category_variable) +
     theme_bw() +
     theme(
-          plot.title = element_text(hjust = 0.5, size = 20),  # 标题居中并设定大小
+          plot.title = element_text(hjust = 0.5, size = 20),  
           legend.position = "right",
-          axis.title.x = element_text(size = 20),  # x轴标题放大
-          axis.title.y = element_text(size = 20),  # y轴标题放大
-          legend.title = element_text(size = 20),  # 图例标题放大
-          legend.text = element_text(size = 20)# 图例文本放大
+          axis.title.x = element_text(size = 20),  
+          axis.title.y = element_text(size = 20),  
+          legend.title = element_text(size = 20),  
+          legend.text = element_text(size = 20)
         )
 
   # 
@@ -427,12 +421,12 @@ plot_time_series_with_means_highlight <- function(data_set, category_info, metri
   #   labs(title = paste("Time Series of", metric_name), x = "Date", y = metric_name, color = category_variable) +
   #   theme_bw() +
   #   theme(
-  #     plot.title = element_text(hjust = 0.5, size = 20),  # 标题居中并设定大小
+  #     plot.title = element_text(hjust = 0.5, size = 20),  
   #     legend.position = "right",
-  #     axis.title.x = element_text(size = 20),  # x轴标题放大
-  #     axis.title.y = element_text(size = 20),  # y轴标题放大
-  #     legend.title = element_text(size = 20),  # 图例标题放大
-  #     legend.text = element_text(size = 20)# 图例文本放大
+  #     axis.title.x = element_text(size = 20), 
+  #     axis.title.y = element_text(size = 20),  
+  #     legend.title = element_text(size = 20), 
+  #     legend.text = element_text(size = 20)
   #   )
   
   

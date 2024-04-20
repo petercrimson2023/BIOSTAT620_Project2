@@ -64,8 +64,6 @@ for (i in unique(complete_data$pseudo_ID)) {
 
 ```{r}
 
-# 创建一个shiny app，查看上面的平滑效果，要求根据pseudo_ID来选择不同的人，选择对应的人时将
-# Total.ST.min和光滑后的数据画在一张图上，使用ggplot2，time变量根据每个人的样本量，建立从1：样本量的序列
 
 library(shiny)
 
@@ -100,9 +98,6 @@ shinyApp(ui = ui, server = server)
 ```{r}
 
 
-# 下一步检查Total.ST.min, Total.St.min.smoothed, Pickups, Proportion.ST, procrastination_score 在 sex,Phase, Xt, Semester 这些变量分组下的均值，中位数，Q1,Q3,variance：
-
-# 创建shinyapp，可以选择一个变量，然后选择一个分组变量，比如sex，然后显示这个变量在不同分组下的均值，中位数，Q1,Q3,variance
 
 ui <- fluidPage(
   titlePanel("Summary Statistics"),
@@ -158,13 +153,11 @@ shinyApp(ui, server)
 
 ```{r}
 
-#通过一个循环，将complete_data中 每个pseudo_ID 的起始日期全部选出，并找到最晚的日期
 
 id_start_date <- complete_data %>%
   group_by(pseudo_ID) %>%
   summarise(start_date = min(Date)) %>% select(start_date)
 
-# 找出最晚的日期
 where_max_date = id_start_date %>% unlist() %>% which.max() 
 
 start_date = id_start_date[where_max_date,"start_date"] %>% pull()
@@ -174,8 +167,6 @@ end_date = as.Date("2024-03-27")
 common_dates = seq.Date(from = start_date[1], to = end_date, by = "day")
 
 
-# 创建一个新的数据集 Total_ST_min，使用common_dates作为时间轴，选取compelte_data_with_date中每个pseudo_id的Total.St.min,
-# 如果该日期下Total.ST.min为空，则用NA填充
 
 summarize_and_pivot <- function(data, value_col, common_dates) {
   data %>%
@@ -313,7 +304,6 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 
-# 定义UI
 ui <- fluidPage(
   titlePanel("Time Series Plot with Gender-Specific Mean Lines"),
   
@@ -332,35 +322,32 @@ ui <- fluidPage(
   )
 )
 
-# 定义Server逻辑
+
 server <- function(input, output) {
   output$time_series <- renderPlot({
     variable <- input$variable
     
-    # 获取相应的数据集
+
     data <- get(variable, envir = globalenv())
     
-    # 转换数据为长格式
+
     data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
-    
-    # 获取性别信息，假设存在一个data.frame `sex_info` 包含 columns `pseudo_ID` 和 `sex`
+
     sex_info <- complete_data %>%
       select(pseudo_ID, sex) %>%
       distinct(pseudo_ID, .keep_all = TRUE)
-    
-    # 将性别信息合并到数据中
+
     data <- left_join(data, sex_info, by = "pseudo_ID")
     
-    # 计算性别特定均值，只对性别为0和1
+
     mean_data <- data %>%
-      filter(sex %in% c(0, 1)) %>%  # 筛选性别为0和1的数据
+      filter(sex %in% c(0, 1)) %>%  
       group_by(Date, sex) %>%
       summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
-    
-    # 绘制图表
+
     ggplot(data, aes(x = Date, y = value)) +
-      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条
-      geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(sex)), size = 1.2) +  # 性别特定均值线条
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  
+      geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(sex)), size = 1.2) +  
       scale_color_manual(values = c("0" = "blue", "1" = "red"), labels = c("0" = "Female", "1" = "Male")) +
       labs(title = paste("Time Series of", variable), x = "Date", y = "value", color = "Gender") +
       theme_bw() +
@@ -368,7 +355,6 @@ server <- function(input, output) {
   })
 }
 
-# 运行Shiny应用
 shinyApp(ui, server)
 
 ```
@@ -400,31 +386,28 @@ ui <- fluidPage(
 server <- function(input, output) {
   output$time_series <- renderPlot({
     variable <- input$variable
-    
-    # 获取相应的数据集
+
     data <- get(variable, envir = globalenv())
     
-    # 转换数据为长格式
     data <- pivot_longer(data, cols = -Date, names_to = "pseudo_ID", values_to = "value")
-    
-    # 获取学期信息，假设存在一个data.frame `semester_info` 包含 columns `pseudo_ID` 和 `Semester`
+
     semester_info <- complete_data %>%
       select(pseudo_ID, Semester) %>%
       distinct(pseudo_ID, .keep_all = TRUE)
     
-    # 将学期信息合并到数据中
+
     data <- left_join(data, semester_info, by = "pseudo_ID")
     
-    # 计算学期特定均值，只对学期为0和1
+
     mean_data <- data %>%
       filter(Semester %in% c(0, 1)) %>%
       group_by(Date, Semester) %>%
       summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
     
-    # 绘制图表
+
     ggplot(data, aes(x = Date, y = value)) +
-      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  # 所有人的线条
-      geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(Semester)), size = 1.2) +  # 学期特定均值线条
+      geom_line(aes(group = pseudo_ID), color = "grey", alpha = 0.5) +  
+      geom_line(data = mean_data, aes(x = Date, y = mean_value, color = as.factor(Semester)), size = 1.2) + 
       scale_color_manual(values = c("0" = "blue", "1" = "red"), labels = c("0" = "Semester 1", "1" = "Semester 2")) +
       labs(title = paste("Time Series of", variable), x = "Date", y = "value", color = "Semester") +
       theme_bw() +
@@ -441,7 +424,6 @@ shinyApp(ui, server)
 
 ```{r}
 
-# 选出 complete_data中Semester=0，且日期大于1月15号的Date
 
 semester_0_start_date <- complete_data %>%
   filter(Semester == 0, Date > as.Date("2024-01-15")) %>% 
@@ -457,18 +439,15 @@ semester_0_start_date <- complete_data %>%
 
 ```{r}
 
-#创建型的一个数据集
-#从complete_data_with_date中选取最早的日期和最晚的日期
 
 min_date <- min(complete_data$Date)
 max_date <- max(complete_data$Date)
 
-# 创建形如 “2024-02-05" 的日趋序列，
+
 
 date_seq <- seq.Date(from = min_date, to = max_date, by = "day")
 
-# 创建一个新的数据集 Total_ST_min，使用data_seq作为时间轴，选取compelte_data_with_date中每个pseudo_id的Total.St.min,
-# 如果该日期下Total.ST.min为空，则用NA填充
+
 
 Total_ST_min <- complete_data %>%
   select(pseudo_ID, Date, Total.ST.min) %>%
@@ -480,7 +459,6 @@ Total_ST_min <- complete_data %>%
   arrange(Date)
 
 
-# 对Social.ST.min, Pickups, Proportion.ST, procrastination_score 也做同样的处理
 
 Social_ST_min <- complete_data %>%
   select(pseudo_ID, Date, Social.ST.min) %>%
@@ -518,9 +496,6 @@ procrastination_score <- complete_data %>%
   right_join(data.frame(Date = date_seq), by = "Date") %>%
   arrange(Date)
 
-
-# 创建一个shiny app，将所有pseudo_ID的数据绘制在同一个图中，每个pseudo_ID用不同的颜色表示 从Total.ST.min, Social.ST.min,Proportion_ST,Pickups 中选择一个变量，选取对应的数据集，绘制在一个时间轴上，使用ggplot2,
-# 每个pseudo_ID用不同的颜色表示
 
 ui <- fluidPage(
   titlePanel("Time Series Plot"),
@@ -569,12 +544,10 @@ shinyApp(ui, server)
 
 ```{r}
 
-# 去掉 complete data with date中 的0604个体
 
 complete_data_with_date <- complete_data_with_date %>%
   filter(pseudo_ID != "0604")
 
-# 根据每个pseudo_ID 分组后建立每个pickups的一阶滞后项对数
 
 complete_data_with_date <- complete_data_with_date %>%
   group_by(pseudo_ID) %>%

@@ -1,0 +1,60 @@
+---
+title: "Pickups_modeling"
+author: "Bulun Te"
+date: "2024-04-19"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# constructing variable
+load("complete_data3_2307_0_5094_0.RData")
+
+complete_data  = complete_data %>% mutate(
+  Pickups_lag_log = log(Pickups_lag),
+  Total.ST.min.log = log(Total.ST.min),
+  is_work_day = Semester * Xt
+)
+
+complete_data <- complete_data %>% 
+  group_by(pseudo_ID) %>% 
+  mutate(success_lag = lag(success, order_by = Date),
+         Total.ST.min.lag = lag(Total.ST.min, order_by = Date),
+         Proportion.ST_lag = lag(Proportion.ST, order_by = Date),
+         Social.ST.min.lag = lag(Social.ST.min, order_by = Date)
+  )
+
+complete_data <- complete_data %>% filter(pseudo_ID != 8622 & pseudo_ID != 9680)
+
+complete_data_A = complete_data %>% filter(Treatment=="A")
+complete_data_B = complete_data %>% filter(Treatment=="B")
+
+library(lme4)
+
+model_3 <-
+  glmer(
+    Pickups ~   Pickups_lag_log + Phase +  Treatment:Phase + Proportion.ST +sex* is_work_day + devices + sex*log(Total.ST.min.lag) + (1 |pseudo_ID ),
+    data = complete_data,
+    family = poisson(link = "log"),
+    control = glmerControl(optCtrl = list(maxfun = 1e5),optimizer = "bobyqa")
+  )
+
+
+lattice::dotplot(ranef(model_3, which = "pseudo_ID", condVar = TRUE), scales = list(y = list(alternating = 0)))
+summary(model_3)
+```
+
+
+
+```{r}
+
+library(merTools)
+reSims <- REsim(model_3, n.sims = 1000)
+plotREsim(reSims)
+
+REsim(model_3, n.sims = 1000) %>% plotREsim() %>% ggsave("plots/REsim_model_3.png",.)
+
+```

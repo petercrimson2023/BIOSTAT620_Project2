@@ -163,6 +163,35 @@ model_binomial <- glm(
 
 summary(model_binomial)
 
+```
+
+
+```{r}
+
+library(ggplot2)
+library(broom)
+
+tidy_model <- broom::tidy(model_binomial)
+
+tidy_model <- tidy_model %>%
+  mutate(conf.low = estimate - 1.96 * std.error,
+         conf.high = estimate + 1.96 * std.error)
+
+ggplot_obj <- ggplot(tidy_model, aes(y = term, x = estimate, xmin = conf.low, xmax = conf.high)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  geom_point() +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+  labs(title = "Forest plot of logistic regression coefficients",
+       x = "Estimate") +
+  theme_minimal() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_text(face = "bold", size = 12))
+
+
+ggplot_obj
+ggsave("plots/forest_plot.png", ggplot_obj, width = 15, height = 10, units = "cm")
+
+
 
 
 ```
